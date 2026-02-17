@@ -460,12 +460,12 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100">
+    <main className="min-h-screen bg-[#121212] text-neutral-100">
       {/* Top bar */}
-      <div className="sticky top-0 z-10 border-b border-neutral-800 bg-neutral-950/80 backdrop-blur">
+      <div className="sticky top-0 z-10 border-b border-neutral-800 bg-inherit backdrop-blur">
         <div className="mx-auto max-w-4xl px-4 py-4 flex items-center justify-between gap-4">
           <div className="flex flex-col">
-            <h1 className="text-lg font-semibold">Case Study Practice</h1>
+            <h1 className="text-lg font-semibold text-[#2c3e50]">Case Study Practice</h1>
             <p className="text-xs text-neutral-400">Chat-style guided practice</p>
           </div>
 
@@ -629,7 +629,7 @@ export default function HomePage() {
       </div>
 
       {/* Composer */}
-      <div className="sticky bottom-0 border-t border-neutral-800 bg-neutral-950/80 backdrop-blur">
+      <div className="sticky bottom-0 border-t border-neutral-800 bg-inherit backdrop-blur">
         <div className="mx-auto max-w-4xl px-4 py-4">
           <div className="flex gap-3 items-end">
             <textarea
