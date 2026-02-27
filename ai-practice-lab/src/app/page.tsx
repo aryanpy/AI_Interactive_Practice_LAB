@@ -475,12 +475,12 @@ export default function HomePage() {
                 {headerBadge}
               </span>
             )}
-            <button
+            {/* <button
               onClick={() => router.push("/profile")}
               className="text-xs rounded-full border border-neutral-700 px-3 py-1 hover:bg-neutral-900"
             >
               Profile
-            </button>
+            </button> */}
           </div>
         </div>
 
