@@ -72,7 +72,7 @@ export default function HomePage() {
       id: uid(),
       role: "system",
       content:
-        "Select a category and difficulty, then click **Fetch case**. I’ll show one question at a time and guide you.",
+        "Select a category and difficulty, then click **Fetch case**. I'll show one question at a time and guide you.",
     },
   ]);
   const [isThinking, setIsThinking] = useState(false);

@@ -115,6 +115,16 @@ export default function LoginPage(){
 
                 <button
                     className="mt-4 text-sm text-gray-700 underline"
+                    onClick={()=> {
+                        setMsg(null);
+                        router.push("/login/password_reset");
+                    }}
+                >
+                    {"Forgot Password?"}
+                </button>
+                
+                <button
+                    className="mt-4 text-sm text-gray-700 underline"
                     onClick={() => {
                         setMsg(null);
                         setMode(mode === "login" ? "signup" : "login");
@@ -122,6 +132,7 @@ export default function LoginPage(){
                 >
                     {mode === "login" ? "Needed an account? Sign Up" : "Already have an account? Sign in"}
                 </button>
+
             </div>
         </main>
     );
