@@ -264,7 +264,7 @@ export default function HomePage() {
             {
               id: uid(),
               role: "assistant",
-              content: "You’ve completed all questions for this case ✅",
+              content: "You've completed all questions for this case ✅",
             },
           ]);
           return;
@@ -443,20 +443,66 @@ export default function HomePage() {
     setFetchRequested(true);
   }
 
-  function handleNewCase() {
+  async function handleNewCase() {
     if (!selectionComplete) {
       setStatus("Please select a category and difficulty first.");
       return;
     }
+
+    setStatus(null);
+    setCaseStudy(null);
+    setAnswer("");
+    setEvalResult(null);
+    setQIndex(0);
+    setAwaitingNextConfirm(false);
+
     setMessages((prev) => [
       ...prev,
-      {
-        id: uid(),
-        role: "assistant",
-        content: "Alright—pulling a new case.",
-      },
+      { id: uid(), role: "assistant", content: `Generating a new **${category}** case at **${LEVEL_LABELS[level!]}** difficulty...` },
     ]);
-    setFetchRequested(true);
+
+    setIsThinking(true);
+
+    try {
+      const res = await fetch("/api/generate-case", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, level }),
+      });
+
+      const json = await res.json();
+      setIsThinking(false);
+
+      if (!res.ok) {
+        const err = json.error ?? "Failed to generate case";
+        setStatus(err);
+        setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: `⚠️ ${err}` }]);
+        return;
+      }
+
+      const cs: CaseStudy = json.case;
+      setCaseStudy(cs);
+
+      const firstQ = cs.questions?.[0] ?? "";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          role: "assistant",
+          content:
+            `### ${cs.title}\n\n` +
+            `${cs.case_text}\n\n` +
+            `**Question 1 of ${cs.questions.length}:**\n` +
+            `${firstQ}\n\n` +
+            `Reply with your reasoning.`,
+        },
+      ]);
+    } catch (e: any) {
+      setIsThinking(false);
+      const msg = e?.message ?? "Generation failed";
+      setStatus(msg);
+      setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: `⚠️ ${msg}` }]);
+    }
   }
 
   return (

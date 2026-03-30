@@ -76,23 +76,30 @@ Remember: if wrong, guide without giving away the answer.
 }
 
 async function callLLM(prompt: string) {
-  const base = process.env.LLM_BASE_URL;
-  const url = `${base}/chat/completions`;
-
-  const res = await fetch(url, {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+      "X-Title": process.env.NEXT_PUBLIC_APP_NAME ?? "Case Study Generator",
+    },
     body: JSON.stringify({
       model: process.env.LLM_MODEL,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
-      max_tokens: 600,
-      stop: ["<|im_end|>", "</s>", "```"],
+      max_tokens: 2400,
+      stop: ["```"],
     }),
   });
 
   const json = await res.json();
-  const text = json?.choices?.[0]?.message?.content ?? "";
+  console.log("FULL OPENROUTER RESPONSE:", JSON.stringify(json));
+  const choice = json?.choices?.[0];
+  const text = choice?.message?.content
+    ?? choice?.message?.reasoning
+    ?? "";
+  console.log("RAW LLM RESPONSE:", text);
   return text;
 }
 
@@ -112,7 +119,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Missing user_id, case_id, or answer_text" });
     }
 
-    // ✅ Require question_index for 1-at-a-time flow
+    // Require question_index for 1-at-a-time flow
     if (question_index === undefined || question_index === null || Number.isNaN(Number(question_index))) {
       return res.status(400).json({ error: "Missing question_index" });
     }
