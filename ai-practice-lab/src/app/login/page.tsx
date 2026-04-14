@@ -112,27 +112,27 @@ export default function LoginPage(){
                         {loading ? "Working..." : mode === "login" ? "Sign in" : "Sign Up"}
                     </button>
                 </form>
-
-                <button
-                    className="mt-4 text-sm text-gray-700 underline"
-                    onClick={()=> {
-                        setMsg(null);
-                        router.push("/login/password_reset");
-                    }}
-                >
-                    {"Forgot Password?"}
-                </button>
-                
-                <button
-                    className="mt-4 text-sm text-gray-700 underline"
-                    onClick={() => {
-                        setMsg(null);
-                        setMode(mode === "login" ? "signup" : "login");
-                    }}
-                >
-                    {mode === "login" ? "Needed an account? Sign Up" : "Already have an account? Sign in"}
-                </button>
-
+                <div className="space-y-4">
+                    <button
+                        className="block mt-4 text-sm text-gray-700 underline"
+                        onClick={()=> {
+                            setMsg(null);
+                            router.push("/login/password_reset");
+                        }}
+                    >
+                        {"Forgot Password?"}
+                    </button>
+                    
+                    <button
+                        className="block mt-4 text-sm text-gray-700 underline"
+                        onClick={() => {
+                            setMsg(null);
+                            setMode(mode === "login" ? "signup" : "login");
+                        }}
+                    >
+                        {mode === "login" ? "Needed an account? Sign Up" : "Already have an account? Sign in"}
+                    </button>
+                </div>
             </div>
         </main>
     );
