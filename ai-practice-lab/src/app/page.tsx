@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { canSpeak, speak, stopSpeaking } from "../lib/voice";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
@@ -40,6 +41,34 @@ function TypingIndicator() {
   );
 }
 
+function IconSpeaker() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className="w-4 h-4"
+    >
+      <path d="M10 3.5a.75.75 0 0 0-1.264-.546L5.203 6H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.203l3.533 3.046A.75.75 0 0 0 10 16.5v-13Z" />
+      <path d="M13.5 6a.75.75 0 0 1 .75.75v6.5a.75.75 0 0 1-1.5 0v-6.5A.75.75 0 0 1 13.5 6ZM16 5a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 16 5Z" />
+    </svg>
+  );
+}
+
+function IconSpeakerOff() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className="w-4 h-4"
+    >
+      <path d="M10 3.5a.75.75 0 0 0-1.264-.546L5.203 6H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.203l3.533 3.046A.75.75 0 0 0 10 16.5v-13ZM14.78 6.22a.75.75 0 1 0-1.06 1.06L15.44 9l-1.72 1.72a.75.75 0 1 0 1.06 1.06L16.5 10.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L17.56 9l1.72-1.72a.75.75 0 1 0-1.06-1.06L16.5 7.94l-1.72-1.72Z" />
+    </svg>
+  );
+}
+
+
 export default function HomePage() {
   const router = useRouter();
 
@@ -62,7 +91,7 @@ export default function HomePage() {
   // fetch happens only when user clicks Fetch case / New case
   const [fetchRequested, setFetchRequested] = useState(false);
 
-  // ✅ one-question-at-a-time flow state (in-memory only; refresh resets everything)
+  // one-question-at-a-time flow state (in-memory only; refresh resets everything)
   const [qIndex, setQIndex] = useState<number>(0);
   const [awaitingNextConfirm, setAwaitingNextConfirm] = useState(false);
 
@@ -77,9 +106,18 @@ export default function HomePage() {
   ]);
   const [isThinking, setIsThinking] = useState(false);
 
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [isSpeakingState, setIsSpeakingState] = useState(false);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const scrollToBottom = () =>
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+
+
+  useEffect(() => {
+    setSpeechSupported(canSpeak());
+  }, []);
 
   // Require login + capture user_id
   useEffect(() => {
@@ -143,97 +181,99 @@ export default function HomePage() {
 
   // Load case ONLY when user requests it (Fetch case / New case)
   useEffect(() => {
-    if (!userId) return;
-    if (!fetchRequested) return;
-    if (!category || level === null) return;
+  if (!fetchRequested) return;
 
-    async function load() {
-      setStatus(null);
-      setCaseStudy(null);
-      setAnswer("");
-      setEvalResult(null);
+  const selectedUserId = userId;
+  const selectedCategory = category;
+  const selectedLevel = level;
 
-      // reset 1-by-1 question state (fresh every fetch)
-      setQIndex(0);
-      setAwaitingNextConfirm(false);
+  if (!selectedUserId || !selectedCategory || selectedLevel === null) return;
 
-      const levelLabel = LEVEL_LABELS[level];
+  async function load() {
+    setStatus(null);
+    setCaseStudy(null);
+    setAnswer("");
+    setEvalResult(null);
+    setQIndex(0);
+    setAwaitingNextConfirm(false);
 
-      setIsThinking(true);
+    const levelLabel = LEVEL_LABELS[selectedLevel!];
+
+    setIsThinking(true);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        role: "assistant",
+        content: `Fetching a **${selectedCategory}** case at **${levelLabel}** difficulty...`,
+      },
+    ]);
+
+    const params = new URLSearchParams({
+      level: String(selectedLevel),
+      category: selectedCategory!,
+      user_id: selectedUserId!,
+    });
+
+    const res = await fetch(`/api/get-case?${params.toString()}`, {
+      cache: "no-store",
+    });
+    const json = await res.json();
+
+    setIsThinking(false);
+    setFetchRequested(false);
+
+    if (!res.ok) {
+      const err = json.error ?? "Failed to load case study";
+      setStatus(err);
       setMessages((prev) => [
         ...prev,
-        {
-          id: uid(),
-          role: "assistant",
-          content: `Fetching a **${category}** case at **${levelLabel}** difficulty...`,
-        },
+        { id: uid(), role: "assistant", content: `⚠️ ${err}` },
       ]);
-
-      const params = new URLSearchParams({
-        level: String(level),
-        category,
-        user_id: userId,
-      });
-
-      const res = await fetch(`/api/get-case?${params.toString()}`, {
-        cache: "no-store",
-      });
-      const json = await res.json();
-
-      setIsThinking(false);
-      setFetchRequested(false);
-
-      if (!res.ok) {
-        const err = json.error ?? "Failed to load case study";
-        setStatus(err);
-        setMessages((prev) => [
-          ...prev,
-          { id: uid(), role: "assistant", content: `⚠️ ${err}` },
-        ]);
-        return;
-      }
-
-      const cs: CaseStudy | null = json.case ?? null;
-      setCaseStudy(cs);
-
-      if (json.source === "generated") {
-        const msg =
-          "Generated a new case (you finished all existing ones in this category).";
-        setStatus(msg);
-        setMessages((prev) => [
-          ...prev,
-          { id: uid(), role: "assistant", content: msg },
-        ]);
-      } else {
-        setStatus(null);
-      }
-
-      if (cs) {
-        const firstQ = cs.questions?.[0] ?? "";
-        const caseMsg =
-          `### ${cs.title}\n\n` +
-          `${cs.case_text}\n\n` +
-          `**Question 1 of ${cs.questions.length}:**\n` +
-          `${firstQ}\n\n` +
-          `Reply with your reasoning.`;
-
-        setMessages((prev) => [
-          ...prev,
-          { id: uid(), role: "assistant", content: caseMsg },
-        ]);
-      }
+      return;
     }
 
-    load().catch((e) => {
-      setIsThinking(false);
-      setFetchRequested(false);
-      setStatus(e.message);
+    const cs: CaseStudy | null = json.case ?? null;
+    setCaseStudy(cs);
+
+    if (json.source === "generated") {
+      const msg =
+        "Generated a new case (you finished all existing ones in this category).";
+      setStatus(msg);
       setMessages((prev) => [
         ...prev,
-        { id: uid(), role: "assistant", content: `⚠️ ${e.message}` },
+        { id: uid(), role: "assistant", content: msg },
       ]);
-    });
-  }, [fetchRequested, userId, category, level]);
+    } else {
+      setStatus(null);
+    }
+
+    if (cs) {
+      const firstQ = cs.questions?.[0] ?? "";
+      const caseMsg =
+        `### ${cs.title}\n\n` +
+        `${cs.case_text}\n\n` +
+        `**Question 1 of ${cs.questions.length}:**\n` +
+        `${firstQ}\n\n` +
+        `Reply with your reasoning.`;
+
+      setMessages((prev) => [
+        ...prev,
+        { id: uid(), role: "assistant", content: caseMsg },
+      ]);
+    }
+  }
+
+  load().catch((e) => {
+    setIsThinking(false);
+    setFetchRequested(false);
+    setStatus(e.message);
+    setMessages((prev) => [
+      ...prev,
+      { id: uid(), role: "assistant", content: `⚠️ ${e.message}` },
+    ]);
+  });
+}, [fetchRequested, userId, category, level]);
 
   async function submitAnswer() {
     if (!caseStudy || !userId) return;
@@ -444,7 +484,11 @@ export default function HomePage() {
   }
 
   async function handleNewCase() {
-    if (!selectionComplete) {
+    const selectedUserId = userId;
+    const selectedCategory = category;
+    const selectedLevel = level;
+
+    if (!selectedUserId || !selectedCategory || selectedLevel === null) {
       setStatus("Please select a category and difficulty first.");
       return;
     }
@@ -458,7 +502,11 @@ export default function HomePage() {
 
     setMessages((prev) => [
       ...prev,
-      { id: uid(), role: "assistant", content: `Generating a new **${category}** case at **${LEVEL_LABELS[level!]}** difficulty...` },
+      {
+        id: uid(),
+        role: "assistant",
+        content: `Generating a new **${selectedCategory}** case at **${LEVEL_LABELS[selectedLevel]}** difficulty...`,
+      },
     ]);
 
     setIsThinking(true);
@@ -467,7 +515,10 @@ export default function HomePage() {
       const res = await fetch("/api/generate-case", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, level }),
+        body: JSON.stringify({
+          category: selectedCategory,
+          level: selectedLevel,
+        }),
       });
 
       const json = await res.json();
@@ -476,7 +527,10 @@ export default function HomePage() {
       if (!res.ok) {
         const err = json.error ?? "Failed to generate case";
         setStatus(err);
-        setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: `⚠️ ${err}` }]);
+        setMessages((prev) => [
+          ...prev,
+          { id: uid(), role: "assistant", content: `⚠️ ${err}` },
+        ]);
         return;
       }
 
@@ -501,8 +555,36 @@ export default function HomePage() {
       setIsThinking(false);
       const msg = e?.message ?? "Generation failed";
       setStatus(msg);
-      setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: `⚠️ ${msg}` }]);
+      setMessages((prev) => [
+        ...prev,
+        { id: uid(), role: "assistant", content: `⚠️ ${msg}` },
+      ]);
     }
+  }
+
+  function handleSpeakMessage(messageId: string, content: string){
+    if(!speechSupported) return;
+
+    const isCurrentMessageSpeaking = speakingMessageId === messageId && isSpeakingState;
+
+    if (isCurrentMessageSpeaking){
+      stopSpeaking();
+      setIsSpeakingState(false);
+      setSpeakingMessageId(null);
+      return;
+    }
+
+    speak(content , {
+      lang: "en-US",
+      onStart: () => {
+        setIsSpeakingState(true);
+        setSpeakingMessageId(messageId);
+      },
+      onEnd: () => {
+        setIsSpeakingState(false);
+        setSpeakingMessageId(null);
+      }
+    })
   }
 
   return (
@@ -624,6 +706,8 @@ export default function HomePage() {
           {messages.map((m) => {
             const isUser = m.role === "user";
             const isSystem = m.role === "system";
+            const isAssistant = m.role === "assistant";
+
             const bubbleStyles = isSystem
               ? "bg-neutral-900/30 border border-neutral-800 text-neutral-300"
               : isUser
@@ -631,6 +715,7 @@ export default function HomePage() {
               : "bg-neutral-900 text-neutral-100 border border-neutral-800";
 
             const align = isUser ? "justify-end" : "justify-start";
+            const isCurrentMessageSpeaking = isAssistant && speakingMessageId === m.id && isSpeakingState;
 
             return (
               <div key={m.id} className={`flex ${align}`}>
@@ -659,6 +744,20 @@ export default function HomePage() {
                   >
                     {m.content}
                   </ReactMarkdown>
+
+                  {isAssistant && speechSupported && (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleSpeakMessage(m.id, m.content)}
+                        className="inline-flex items-center justify-center rounded-full border border-neutral-700 p-2 text-neutral-300 hover:bg-neutral-800 hover:text-white transition"
+                        title={isCurrentMessageSpeaking ? "Stop reading" : "Read aloud"}
+                        aria-label={isCurrentMessageSpeaking ? "Stop reading" : "Read aloud"}
+                      >
+                        {isCurrentMessageSpeaking ? <IconSpeakerOff /> : <IconSpeaker />}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
