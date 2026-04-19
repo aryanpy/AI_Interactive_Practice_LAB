@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { canSpeak, speak, stopSpeaking } from "../lib/voice";
+import {
+  canSpeak, speak, stopSpeaking,
+  canListen, startListening, stopListening,
+} from "../lib/voice";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
@@ -68,6 +71,33 @@ function IconSpeakerOff() {
   );
 }
 
+function IconMic() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className="w-4 h-4"
+    >
+      <path d="M7 4a3 3 0 0 1 6 0v6a3 3 0 1 1-6 0V4Z" />
+      <path d="M5.5 9.643a.75.75 0 0 0-1.5 0V10a6 6 0 0 0 5.25 5.955V17.5h-1.5a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-1.5v-1.545A6 6 0 0 0 16 10v-.357a.75.75 0 0 0-1.5 0V10a4.5 4.5 0 0 1-9 0v-.357Z" />
+    </svg>
+  );
+}
+
+function IconMicOff() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className="w-4 h-4"
+    >
+      <path d="M10 1a3 3 0 0 0-3 3v.585l5.874 5.874A3 3 0 0 0 13 10V4a3 3 0 0 0-3-3ZM3.28 2.22a.75.75 0 0 0-1.06 1.06l14.5 14.5a.75.75 0 1 0 1.06-1.06L3.28 2.22ZM7 12.24l-1.5-1.5V10a.75.75 0 0 0-1.5 0v.357A6 6 0 0 0 9.25 15.955V17.5h-1.5a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-1.5v-1.545a5.978 5.978 0 0 0 2.56-.975L11.2 13.37A4.5 4.5 0 0 1 7 12.24ZM14.97 11.65A4.471 4.471 0 0 0 15.5 10v-.357a.75.75 0 0 0-1.5 0V10c0 .546-.1 1.07-.282 1.552l1.252 1.098Z" />
+    </svg>
+  );
+}
+
 
 export default function HomePage() {
   const router = useRouter();
@@ -110,6 +140,9 @@ export default function HomePage() {
   const [isSpeakingState, setIsSpeakingState] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
+  const [listenSupported, setListenSupported] = useState(false);
+  const [isListeningState, setIsListeningState] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const scrollToBottom = () =>
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -117,6 +150,12 @@ export default function HomePage() {
 
   useEffect(() => {
     setSpeechSupported(canSpeak());
+    setListenSupported(canListen());
+  }, []);
+
+  // Stop listening if the component unmounts
+  useEffect(() => {
+    return () => { stopListening(); };
   }, []);
 
   // Require login + capture user_id
@@ -587,6 +626,31 @@ export default function HomePage() {
     })
   }
 
+  function handleToggleListen() {
+    if (!listenSupported) return;
+
+    if (isListeningState) {
+      stopListening();
+      setIsListeningState(false);
+      return;
+    }
+
+    startListening({
+      lang: "en-US",
+      continuous: true,
+      interimResults: true,
+      onStart: () => setIsListeningState(true),
+      onResult: ({ transcript, isFinal }) => {
+        setAnswer(transcript);
+        if (isFinal) {
+          // keep the final text in the box; user can edit or send
+        }
+      },
+      onEnd: () => setIsListeningState(false),
+      onError: () => setIsListeningState(false),
+    });
+  }
+
   return (
     <main className="min-h-screen bg-[#121212] text-neutral-100">
       {/* Top bar */}
@@ -796,6 +860,23 @@ export default function HomePage() {
                 }
               }}
             />
+            {listenSupported && (
+              <button
+                type="button"
+                onClick={handleToggleListen}
+                disabled={!caseStudy || isThinking}
+                className={[
+                  "rounded-2xl border px-4 py-3 text-sm transition disabled:opacity-50 disabled:cursor-not-allowed",
+                  isListeningState
+                    ? "border-red-500 bg-red-500/20 text-red-400 animate-pulse"
+                    : "border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800",
+                ].join(" ")}
+                title={isListeningState ? "Stop listening" : "Speak your answer"}
+                aria-label={isListeningState ? "Stop listening" : "Speak your answer"}
+              >
+                {isListeningState ? <IconMicOff /> : <IconMic />}
+              </button>
+            )}
             <button
               onClick={submitAnswer}
               className="rounded-2xl bg-neutral-100 text-neutral-900 px-4 py-3 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
