@@ -53,59 +53,35 @@ export default function AdminPage() {
       setError(null);
 
       const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData.session?.user;
+      const session = sessionData.session;
 
-      if (!user) {
+      if (!session) {
         router.push("/login");
         return;
       }
 
-      const { data: currentProfile, error: adminError } = await supabase
-        .from("profiles")
-        .select("is_admin")
-        .eq("id", user.id)
-        .single();
+      const res = await fetch("/api/admin-dashboard", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
 
-      if (adminError || !currentProfile?.is_admin) {
-        router.push("/dashboard");
-        return;
-      }
+      const json = await res.json();
 
-      const { data: profilesData, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, email, first_name, last_name, full_name, is_admin")
-        .order("created_at", { ascending: false });
+      if (!res.ok) {
+        if (res.status === 403) {
+          router.push("/dashboard");
+          return;
+        }
 
-      if (profilesError) {
-        setError(profilesError.message);
+        setError(json.error ?? "Failed to load admin dashboard");
         setLoading(false);
         return;
       }
 
-      const { data: attemptsData, error: attemptsError } = await supabase
-        .from("attempts")
-        .select("id, user_id, case_id, score, is_correct, created_at, question_text")
-        .order("created_at", { ascending: false });
-
-      if (attemptsError) {
-        setError(attemptsError.message);
-        setLoading(false);
-        return;
-      }
-
-      const { data: casesData, error: casesError } = await supabase
-        .from("case_studies")
-        .select("id, title, category, level");
-
-      if (casesError) {
-        setError(casesError.message);
-        setLoading(false);
-        return;
-      }
-
-      setProfiles(profilesData ?? []);
-      setAttempts(attemptsData ?? []);
-      setCaseStudies(casesData ?? []);
+      setProfiles(json.profiles ?? []);
+      setAttempts(json.attempts ?? []);
+      setCaseStudies(json.caseStudies ?? []);
       setLoading(false);
     }
 
@@ -157,7 +133,7 @@ export default function AdminPage() {
       .slice(0, 5);
   }, [search, profiles]);
 
-  const selectedUserAttempts = useMemo(() => {
+  const selectedUserAttempts: UserAttempt[] = useMemo(() => {
     if (!selectedUser) return [];
 
     const caseMap = new Map(
